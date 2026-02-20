@@ -1,209 +1,158 @@
-import pygame 
-import sys
+import pygame
 import random
+import os
+from enfocate import GameBase, GameMetadata
 
-# --- CONFIGURACIÓN DE PANTALLA ---
-Width = 1280
-Height = 720
-board_size = 600  
-cell_size = board_size // 4
-offset_x = (Width - board_size) // 2
-offset_y = (Height - board_size) // 2
-
-# Colores
-fondo_pantalla = (45, 45, 48)  
-COLORES = {
-    0: (55, 55, 60), 2: (255, 173, 173), 4: (255, 214, 165),
-    8: (253, 255, 182), 16: (202, 255, 191), 32: (155, 246, 255),
-    64: (160, 196, 255), 128: (189, 178, 255), 256: (255, 198, 255),
-    512: (216, 226, 233), 1024: (178, 235, 242), 2048: (255, 229, 180),
-}
-
-# --- FRASES MOTIVADORAS ---
-FRASES = [
-    "¡No te rindas! Cada error es una lección.",
-    "El éxito es la suma de pequeños esfuerzos.",
-    "¡Casi lo logras! Inténtalo una vez más.",
-    "Tu único rival es tu puntuación anterior.",
-    "¡Ánimo! La persistencia vence al tablero.",
-    "No es un fracaso, es un entrenamiento.",
-    "¡Tú puedes! Mañana serás mejor que hoy.",
-    "El camino al Colorfusion está lleno de intentos.",
-    "¡Respira profundo y vuelve a empezar!",
-    "La magia ocurre cuando no te detienes."
-]
-
-pygame.init()
-screen = pygame.display.set_mode((Width, Height))
-pygame.display.set_caption("ColorFusion - Edición Motivadora")
-clock = pygame.time.Clock()
-
-board = [[0]*4 for _ in range(4)]
-game_over = False
-gamer_won = False
-frase_actual = "" # Variable para guardar la frase del momento
-
-# --- LÓGICA DEL JUEGO ---
-def generate_new_number():
-    empty = [(i, j) for i in range(4) for j in range(4) if board[i][j] == 0]
-    if empty:
-        i, j = random.choice(empty)
-        board[i][j] = random.choice([2, 4])
-
-def compress(nums):
-    new_nums = [num for num in nums if num != 0]
-    nums[:] = new_nums + [0] * (4 - len(new_nums))
-
-def merge(nums):
-    global gamer_won
-    for i in range(3):
-        if nums[i] == nums[i+1] and nums[i] != 0:
-            nums[i] *= 2
-            nums[i+1] = 0
-            if nums[i] == 2048: gamer_won = True
-
-def move_left():
-    moved = False
-    for i in range(4):
-        original = board[i][:]
-        compress(board[i]); merge(board[i]); compress(board[i])
-        if original != board[i]: moved = True
-    return moved
-
-def move_right():
-    moved = False
-    for i in range(4):
-        original = board[i][:]
-        row = board[i][::-1]
-        compress(row); merge(row); compress(row)
-        board[i] = row[::-1]
-        if original != board[i]: moved = True
-    return moved
-
-def move_up():
-    moved = False
-    for j in range(4):
-        col = [board[i][j] for i in range(4)]
-        original = col[:]
-        compress(col); merge(col); compress(col)
-        for i in range(4): board[i][j] = col[i]
-        if original != [board[i][j] for i in range(4)]: moved = True
-    return moved
-
-def move_down():
-    moved = False
-    for j in range(4):
-        col = [board[i][j] for i in range(4)][::-1]
-        original = col[::-1]
-        compress(col); merge(col); compress(col)
-        col = col[::-1]
-        for i in range(4): board[i][j] = col[i]
-        if original != [board[i][j] for i in range(4)]: moved = True
-    return moved
-
-def check_game_over():
-    if any(0 in row for row in board): return False
-    for i in range(4):
-        for j in range(3):
-            if board[i][j] == board[i][j+1] or board[j][i] == board[j+1][i]: return False
-    return True
-
-def reset_game():
-    global board, game_over, gamer_won
-    board = [[0]*4 for _ in range(4)]
-    game_over = False; gamer_won = False
-    generate_new_number(); generate_new_number()
-
-# --- FUNCIONES DE DIBUJO ---
-
-def draw_color_guide():
-    fuente_guia = pygame.font.SysFont("Verdana", 14, bold=True)
-    evolucion = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    mitad = len(evolucion) // 2
-    izq = evolucion[:mitad]
-    der = evolucion[mitad:]
-    
-    def dibujar_seccion(x_start, lista):
-        for i, val in enumerate(lista):
-            y_pos = 110 + (i * 95)
-            proximo = val * 2
-            c1, c_res = COLORES.get(val), COLORES.get(proximo)
-            pygame.draw.rect(screen, c1, (x_start, y_pos, 30, 30), border_radius=5)
-            pygame.draw.rect(screen, c1, (x_start + 40, y_pos, 30, 30), border_radius=5)
-            pygame.draw.rect(screen, (150, 150, 150), (x_start + 78, y_pos + 12, 12, 4))
-            pygame.draw.rect(screen, c_res, (x_start + 100, y_pos, 30, 30), border_radius=5)
-            txt = fuente_guia.render(f"{val}+{val}={proximo}", True, (220, 220, 220))
-            screen.blit(txt, (x_start, y_pos + 35))
-
-    dibujar_seccion(40, izq)
-    dibujar_seccion(Width - 175, der)
-
-def draw_screen():
-    screen.fill(fondo_pantalla)
-    draw_color_guide()
-    fuente = pygame.font.SysFont("Verdana", 60, bold=True)
-    
-    pygame.draw.rect(screen, (35, 35, 38), (offset_x-10, offset_y-10, board_size+20, board_size+20), border_radius=20)
-
-    for i in range(4):
-        for j in range(4):
-            value = board[i][j]
-            color_f = COLORES.get(value, COLORES[0])
-            rect = pygame.Rect(offset_x + j * cell_size + 8, offset_y + i * cell_size + 8, cell_size - 16, cell_size - 16)
-            pygame.draw.rect(screen, color_f, rect, border_radius=15)
-            if value != 0:
-                color_t = (max(0, color_f[0]-50), max(0, color_f[1]-50), max(0, color_f[2]-50))
-                text_surf = fuente.render(str(value), True, color_t)
-                text_rect = text_surf.get_rect(center=rect.center)
-                screen.blit(text_surf, text_rect)
-
-    if gamer_won or game_over:
-        overlay = pygame.Surface((Width, Height))
-        color_overlay = (255, 229, 180) if gamer_won else (40, 40, 45)
-        overlay.fill(color_overlay)
-        overlay.set_alpha(210)
-        screen.blit(overlay, (0, 0))
+class ColorFusion(GameBase):
+    def __init__(self):
+        metadata = GameMetadata(
+            title="Color Fusion - Edición Motivadora",
+            description="Lógica 2048 con Guía Lateral Ampliada",
+            authors=["TuNombre"],
+            group_number=7
+        )
+        super().__init__(metadata)
         
-        msg = "¡Fusión Lograda!" if gamer_won else "Game Over"
-        msg_font = pygame.font.SysFont("Verdana", 60, bold=True)
-        txt = msg_font.render(msg, True, (200, 50, 50) if game_over else (100, 200, 100))
-        screen.blit(txt, (Width//2 - txt.get_width()//2, Height//2 - 80))
+        # --- COLORES EXACTOS DE LA IMAGEN (Pasteles) ---
+        self.colores = {
+            0: (55, 60, 70),
+            2: (255, 173, 173),    # Rosa
+            4: (255, 214, 165),    # Naranja
+            8: (253, 255, 182),    # Amarillo
+            16: (202, 255, 191),   # Verde claro
+            32: (155, 251, 192),   # Verde menta
+            64: (160, 196, 255),   # Azul
+            128: (189, 178, 255),  # Morado
+            256: (255, 198, 255),  # Fucsia
+            512: (255, 255, 252),  # Blanco
+            1024: (152, 245, 255), # Cian
+            2048: (255, 222, 173)  # Dorado
+        }
         
-        # --- DIBUJAR FRASE MOTIVADORA ---
-        if game_over:
-            fuente_frase = pygame.font.SysFont("Verdana", 30, italic=True)
-            txt_frase = fuente_frase.render(frase_actual, True, (255, 255, 255))
-            screen.blit(txt_frase, (Width//2 - txt_frase.get_width()//2, Height//2))
-
-        sub_txt = pygame.font.SysFont("Verdana", 25).render("Presiona R para reiniciar", True, (150, 150, 150))
-        screen.blit(sub_txt, (Width//2 - sub_txt.get_width()//2, Height//2 + 80))
-
-# --- BUCLE PRINCIPAL ---
-reset_game()
-while True:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit(); sys.exit()
+        pygame.font.init()
+        self.font_num = pygame.font.SysFont("Verdana", 40, bold=True)
+        self.font_guia_txt = pygame.font.SysFont("Arial", 16, bold=True)
         
-        if event.type == pygame.KEYDOWN:
-            if (game_over or gamer_won) and event.key == pygame.K_r:
-                reset_game()
-            elif not game_over and not gamer_won:
-                moved = False
-                if event.key == pygame.K_LEFT: moved = move_left()
-                elif event.key == pygame.K_RIGHT: moved = move_right()
-                elif event.key == pygame.K_UP: moved = move_up()
-                elif event.key == pygame.K_DOWN: moved = move_down()
-                
-                if moved:
-                    generate_new_number()
-                    if check_game_over(): 
-                        game_over = True
-                        frase_actual = random.choice(FRASES) # Elige frase al perder
+        self.tecla_liberada = True
+        self.reset_game()
 
-    draw_screen()
-    pygame.display.flip()
-    clock.tick(60)r
+    def reset_game(self):
+        self.board = [[0]*4 for _ in range(4)]
+        self.generate_number()
+        self.generate_number()
 
+    def generate_number(self):
+        vacias = [(i,j) for i in range(4) for j in range(4) if self.board[i][j] == 0]
+        if vacias:
+            i, j = random.choice(vacias)
+            self.board[i][j] = random.choice([2, 4])
 
+    def update(self, dt):
+        keys = pygame.key.get_pressed()
+        # Detectar si alguna tecla de movimiento está siendo presionada
+        presionada = keys[pygame.K_UP] or keys[pygame.K_w] or \
+                     keys[pygame.K_DOWN] or keys[pygame.K_s] or \
+                     keys[pygame.K_LEFT] or keys[pygame.K_a] or \
+                     keys[pygame.K_RIGHT] or keys[pygame.K_d]
+
+        if presionada and self.tecla_liberada:
+            moved = False
+            if keys[pygame.K_UP] or keys[pygame.K_w]:    moved = self.move('U')
+            elif keys[pygame.K_DOWN] or keys[pygame.K_s]:  moved = self.move('D')
+            elif keys[pygame.K_LEFT] or keys[pygame.K_a]:  moved = self.move('L')
+            elif keys[pygame.K_RIGHT] or keys[pygame.K_d]: moved = self.move('R')
             
+            if moved:
+                self.generate_number()
+            self.tecla_liberada = False # Bloqueo hasta soltar la tecla
+            
+        if not presionada:
+            self.tecla_liberada = True
+
+    def move(self, dir):
+        moved = False
+        for i in range(4):
+            # Extraer fila o columna según dirección
+            line = self.board[i][:] if dir in ['L','R'] else [self.board[k][i] for k in range(4)]
+            
+            # Limpiar ceros y orientar según dirección
+            temp = [x for x in (line[::-1] if dir in ['R','D'] else line) if x != 0]
+            
+            # Fusionar números iguales
+            for k in range(len(temp)-1):
+                if temp[k] == temp[k+1] and temp[k] != 0:
+                    temp[k] *= 2
+                    temp[k+1] = 0
+            
+            # Limpiar ceros post-fusión y rellenar hasta 4
+            temp = [x for x in temp if x != 0]
+            temp += [0]*(4-len(temp))
+            
+            # Volver a la orientación original si era necesario
+            final = temp[::-1] if dir in ['R','D'] else temp
+            
+            if final != line:
+                moved = True
+                if dir in ['L','R']: self.board[i] = final
+                else:
+                    for k in range(4): self.board[k][i] = final[k]
+        return moved
+
+    def dibujar_columna_guia(self, screen, x_base, valores):
+        # Configuración de tamaño de la guía (MÁS GRANDE)
+        tam_cuadro = 42
+        espaciado_y = 95
+        
+        for idx, val in enumerate(valores):
+            y_pos = 70 + (idx * espaciado_y)
+            
+            # Texto de la operación (ej: 2+2=4)
+            txt = self.font_guia_txt.render(f"{val}+{val}={val*2}", True, (200, 200, 200))
+            screen.blit(txt, (x_base, y_pos))
+            
+            # Dibujo de la secuencia: [Cuadro] [Cuadro] - [Resultado]
+            y_cuadros = y_pos + 25
+            # Bloque 1
+            pygame.draw.rect(screen, self.colores[val], (x_base, y_cuadros, tam_cuadro, tam_cuadro-5), border_radius=6)
+            # Bloque 2
+            pygame.draw.rect(screen, self.colores[val], (x_base + tam_cuadro + 10, y_cuadros, tam_cuadro, tam_cuadro-5), border_radius=6)
+            # Guion
+            pygame.draw.rect(screen, (120, 120, 120), (x_base + (tam_cuadro*2) + 15, y_cuadros + 18, 12, 4))
+            # Bloque Resultado
+            res_val = val * 2
+            pygame.draw.rect(screen, self.colores.get(res_val, (255,255,255)), (x_base + (tam_cuadro*2) + 35, y_cuadros, tam_cuadro, tam_cuadro-5), border_radius=6)
+
+    def draw(self, screen):
+        screen.fill((43, 44, 48)) # Fondo gris oscuro
+        sw, sh = screen.get_size()
+        
+        # --- GUÍAS LATERALES ---
+        # Izquierda: 2 al 32
+        self.dibujar_columna_guia(screen, 35, [2, 4, 8, 16, 32])
+        # Derecha: 64 al 1024
+        self.dibujar_columna_guia(screen, sw - 195, [64, 128, 256, 512, 1024])
+
+        # --- TABLERO CENTRADO ---
+        tile_size = 105
+        gap = 12
+        board_size = (tile_size * 4) + (gap * 5)
+        bx = (sw - board_size) // 2
+        by = (sh - board_size) // 2
+        
+        # Fondo del tablero
+        pygame.draw.rect(screen, (34, 34, 38), (bx, by, board_size, board_size), border_radius=15)
+        
+        for i in range(4):
+            for j in range(4):
+                val = self.board[i][j]
+                color = self.colores.get(val, (60, 60, 65))
+                rx = bx + gap + (j * (tile_size + gap))
+                ry = by + gap + (i * (tile_size + gap))
+                
+                pygame.draw.rect(screen, color, (rx, ry, tile_size, tile_size), border_radius=10)
+                
+                if val != 0:
+                    # Texto del número con color gris oscuro para contraste
+                    txt_surf = self.font_num.render(str(val), True, (90, 90, 90))
+                    rect = txt_surf.get_rect(center=(rx + tile_size//2, ry + tile_size//2))
+                    screen.blit(txt_surf, rect)
