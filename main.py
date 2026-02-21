@@ -1,60 +1,82 @@
 import pygame
 import os
 import sys
+from pathlib import Path
 from enfocate import GameBase, GameMetadata
 from colorfusion import ColorFusion
 
 class MainMenu(GameBase):
     def __init__(self):
         metadata = GameMetadata(
-            title="Color Fusion",
-            description="Menu Principal",
-            authors=["Luis Lameda","Genesis Bentancout, Antonella Fermin, Alexandra Cedeño "],
-            group_number= 8
+            title="Menu Color Fusion",
+            description="Menú principal con assets",
+            authors=["TuNombre"],
+            group_number=7
         )
         super().__init__(metadata)
+
+        pygame.font.init()
         self.estado = "menu"
         self.opcion = 0
         self.juego = None
-        self.tecla_presionada = False
-
-        pygame.font.init()
+        self.tecla_bloqueada = False
         
-        ruta_fondo = os.path.join("fuente", "fondo2.jpeg")
-        try:
-            self.imagen_fondo = pygame.image.load(ruta_fondo)
-        except:
-            self.imagen_fondo = None
-
-        ruta_fuente = os.path.join("fuente", "Fuente.otf")
-        try:
-            self.fuente_titulo = pygame.font.Font(ruta_fuente, 110)
-        except:
-            self.fuente_titulo = pygame.font.SysFont("Arial", 110, bold=True)
+        # --- RUTA DINÁMICA ---
+        self.base_path = Path(__file__).parent.resolve()
+        self.ruta_recursos = self.base_path / "fuente"
         
-        self.fuente_btn = pygame.font.SysFont("Arial", 50, bold=True)
+        # 1. CARGAR IMAGEN
+        self.imagen_fondo_raw = None
+        self.fondo_escalado = None
+        ruta_foto = self.ruta_recursos / "fondo2.jpeg"
+        
+        if ruta_foto.exists():
+            try:
+                self.imagen_fondo_raw = pygame.image.load(str(ruta_foto))
+            except Exception as e:
+                print(f"❌ Error al cargar imagen: {e}")
+
+        # 2. CARGAR FUENTE
+        ruta_fuente_archivo = self.ruta_recursos / "Fuente.otf"
+        if ruta_fuente_archivo.exists():
+            self.font_titulo = pygame.font.Font(str(ruta_fuente_archivo), 110)
+            self.font_botones = pygame.font.Font(str(ruta_fuente_archivo), 75)
+        else:
+            self.font_titulo = pygame.font.SysFont("Arial", 110, bold=True)
+            self.font_botones = pygame.font.SysFont("Arial", 75, bold=True)
+
+    def on_start(self):
+        ancho, alto = self.surface.get_size()
+        if self.imagen_fondo_raw:
+            try:
+                self.fondo_escalado = pygame.transform.scale(
+                    self.imagen_fondo_raw.convert(), (ancho, alto)
+                )
+            except Exception as e:
+                print(f"❌ Error en on_start: {e}")
 
     def update(self, dt):
         keys = pygame.key.get_pressed()
-        
         if self.estado == "menu":
-            if not self.tecla_presionada:
-                if keys[pygame.K_UP] or keys[pygame.K_w]:
-                    self.opcion = 0
-                    self.tecla_presionada = True
-                elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            if not self.tecla_bloqueada:
+                if keys[pygame.K_DOWN] or keys[pygame.K_s]:
                     self.opcion = 1
-                    self.tecla_presionada = True
+                    self.tecla_bloqueada = True
+                elif keys[pygame.K_UP] or keys[pygame.K_w]:
+                    self.opcion = 0
+                    self.tecla_bloqueada = True
                 elif keys[pygame.K_RETURN] or keys[pygame.K_SPACE]:
                     if self.opcion == 0:
                         self.juego = ColorFusion()
+                        self.juego._surface = self.surface 
+                        self.juego.on_start()
                         self.estado = "juego"
                     else:
                         pygame.quit()
                         sys.exit()
             
             if not any([keys[pygame.K_UP], keys[pygame.K_DOWN], keys[pygame.K_w], keys[pygame.K_s], keys[pygame.K_RETURN]]):
-                self.tecla_presionada = False
+                self.tecla_bloqueada = False
 
         elif self.estado == "juego" and self.juego:
             if keys[pygame.K_ESCAPE]:
@@ -64,42 +86,52 @@ class MainMenu(GameBase):
                 self.juego.update(dt)
 
     def draw(self):
-        screen = pygame.display.get_surface()
-        if not screen: return
-        
-        ancho, alto = screen.get_size()
+        ancho, alto = self.surface.get_size()
 
-        if self.estado == "juego" and self.juego:
-            self.juego.draw(screen)
+        if self.fondo_escalado:
+            self.surface.blit(self.fondo_escalado, (0, 0))
         else:
-            if self.imagen_fondo:
-                fondo_escalado = pygame.transform.scale(self.imagen_fondo, (ancho, alto))
-                screen.blit(fondo_escalado, (0, 0))
-            else:
-                screen.fill((43, 48, 58))
+            self.surface.fill((28, 28, 56)) 
 
-            tit_surf = self.fuente_titulo.render("COLOR FUSION", True, (158, 210, 232))
-            tit_rect = tit_surf.get_rect(center=(ancho // 2, alto * 0.25))
-            screen.blit(self.fuente_titulo.render("COLOR FUSION", True, (20, 20, 20)), (tit_rect.x + 4, tit_rect.y + 4))
-            screen.blit(tit_surf, tit_rect)
+        if self.estado == "menu":
+            # --- COLORES ---
+            ROJO_PASTEL = (255, 120, 120)
+            DORADO = (255, 215, 0)
+            BLANCO = (255, 255, 255)
 
-            ancho_btn = 420
-            alto_btn = 100
-            espaciado = 130
-            y_inicial = (alto // 2) - 50 
+            # 2. Dibujar Título con BORDE BLANCO
+            texto_str = "COLORFUSION"
+            rect_titulo = self.font_titulo.render(texto_str, True, ROJO_PASTEL).get_rect(center=(ancho // 2, 180))
+            
+            # --- EFECTO DE BORDE (Dibujar en blanco desplazado) ---
+            grosor = 3
+            for dx in range(-grosor, grosor + 1):
+                for dy in range(-grosor, grosor + 1):
+                    if dx != 0 or dy != 0:
+                        temp_borde = self.font_titulo.render(texto_str, True, BLANCO)
+                        self.surface.blit(temp_borde, (rect_titulo.x + dx, rect_titulo.y + dy))
 
-            for i, texto in enumerate(["JUGAR", "SALIR"]):
-                rect = pygame.Rect(0, 0, ancho_btn, alto_btn)
-                rect.center = (ancho // 2, y_inicial + (i * espaciado))
+            # Dibujar el texto principal encima
+            txt_titulo = self.font_titulo.render(texto_str, True, ROJO_PASTEL)
+            self.surface.blit(txt_titulo, rect_titulo)
+
+            # 3. Dibujar Botones
+            botones = ["JUGAR", "SALIR"]
+            posiciones_y = [380, 520]
+
+            for i, texto in enumerate(botones):
+                color_texto = DORADO if self.opcion == i else BLANCO
+                txt_render = self.font_botones.render(texto, True, color_texto)
+                rect_btn = txt_render.get_rect(center=(ancho // 2, posiciones_y[i]))
                 
-                col_btn = (245, 245, 225) if self.opcion == i else (40, 50, 65)
-                col_txt = (40, 40, 40) if self.opcion == i else (245, 245, 225)
-                
-                pygame.draw.rect(screen, col_btn, rect, border_radius=35)
-                pygame.draw.rect(screen, (158, 210, 232), rect, width=4, border_radius=35)
-                
-                txt_surf = self.fuente_btn.render(texto, True, col_txt)
-                screen.blit(txt_surf, txt_surf.get_rect(center=rect.center))
+                if self.opcion == i:
+                    borde_rect = rect_btn.inflate(60, 30) 
+                    pygame.draw.rect(self.surface, DORADO, borde_rect, 5, 15)
+
+                self.surface.blit(txt_render, rect_btn)
+
+        elif self.estado == "juego" and self.juego:
+            self.juego.draw()
 
 if __name__ == "__main__":
     MainMenu().run_preview()

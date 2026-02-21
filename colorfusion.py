@@ -1,158 +1,175 @@
 import pygame
 import random
-import os
 from enfocate import GameBase, GameMetadata
 
 class ColorFusion(GameBase):
     def __init__(self):
         metadata = GameMetadata(
-            title="Color Fusion - Edición Motivadora",
-            description="Lógica 2048 con Guía Lateral Ampliada",
-            authors=["TuNombre"],
-            group_number=7
+            title="Color Fusion",
+            description="2048 con guía de colores lateral",
+            authors=["Luis Lameda", "Genesis Bentancout", "Antonella Fermin", "Alexandra Cedeño"],
+            group_number=8
         )
         super().__init__(metadata)
-        
-        # --- COLORES EXACTOS DE LA IMAGEN (Pasteles) ---
-        self.colores = {
-            0: (55, 60, 70),
-            2: (255, 173, 173),    # Rosa
-            4: (255, 214, 165),    # Naranja
-            8: (253, 255, 182),    # Amarillo
-            16: (202, 255, 191),   # Verde claro
-            32: (155, 251, 192),   # Verde menta
-            64: (160, 196, 255),   # Azul
-            128: (189, 178, 255),  # Morado
-            256: (255, 198, 255),  # Fucsia
-            512: (255, 255, 252),  # Blanco
-            1024: (152, 245, 255), # Cian
-            2048: (255, 222, 173)  # Dorado
+
+        # Colores Pastel
+        self.COLORES = {
+            0: (55, 55, 60), 2: (255, 173, 173), 4: (255, 214, 165),
+            8: (253, 255, 182), 16: (202, 255, 191), 32: (155, 251, 192),
+            64: (160, 196, 255), 128: (189, 178, 255), 256: (255, 198, 255),
+            512: (255, 255, 252), 1024: (152, 245, 255), 2048: (255, 222, 173)
         }
-        
+
+        self.board = [[0]*4 for _ in range(4)]
+        self.game_over = False
+        self.tecla_liberada = True 
+        self.mostrando_ayuda = True 
+
+    def on_start(self):
         pygame.font.init()
-        self.font_num = pygame.font.SysFont("Verdana", 40, bold=True)
-        self.font_guia_txt = pygame.font.SysFont("Arial", 16, bold=True)
-        
-        self.tecla_liberada = True
+        # Usamos una fuente un poco más gruesa para que el color se note mejor
+        self.font = pygame.font.SysFont("Arial", 55, bold=True)
+        self.font_guia = pygame.font.SysFont("Arial", 16, bold=True)
+        self.font_ayuda = pygame.font.SysFont("Arial", 24, bold=True)
         self.reset_game()
 
     def reset_game(self):
         self.board = [[0]*4 for _ in range(4)]
-        self.generate_number()
-        self.generate_number()
+        self.generate_new_number()
+        self.generate_new_number()
 
-    def generate_number(self):
-        vacias = [(i,j) for i in range(4) for j in range(4) if self.board[i][j] == 0]
-        if vacias:
-            i, j = random.choice(vacias)
-            self.board[i][j] = random.choice([2, 4])
+    def generate_new_number(self):
+        empty = [(i,j) for i in range(4) for j in range(4) if self.board[i][j]==0]
+        if empty:
+            i,j = random.choice(empty)
+            self.board[i][j] = random.choice([2,4])
 
-    def update(self, dt):
-        keys = pygame.key.get_pressed()
-        # Detectar si alguna tecla de movimiento está siendo presionada
-        presionada = keys[pygame.K_UP] or keys[pygame.K_w] or \
-                     keys[pygame.K_DOWN] or keys[pygame.K_s] or \
-                     keys[pygame.K_LEFT] or keys[pygame.K_a] or \
-                     keys[pygame.K_RIGHT] or keys[pygame.K_d]
+    def compress(self, row):
+        new = [i for i in row if i != 0]
+        return new + [0]*(4-len(new))
 
-        if presionada and self.tecla_liberada:
-            moved = False
-            if keys[pygame.K_UP] or keys[pygame.K_w]:    moved = self.move('U')
-            elif keys[pygame.K_DOWN] or keys[pygame.K_s]:  moved = self.move('D')
-            elif keys[pygame.K_LEFT] or keys[pygame.K_a]:  moved = self.move('L')
-            elif keys[pygame.K_RIGHT] or keys[pygame.K_d]: moved = self.move('R')
-            
-            if moved:
-                self.generate_number()
-            self.tecla_liberada = False # Bloqueo hasta soltar la tecla
-            
-        if not presionada:
-            self.tecla_liberada = True
+    def merge(self, row):
+        for i in range(3):
+            if row[i] == row[i+1] and row[i] != 0:
+                row[i] *= 2
+                row[i+1] = 0
+        return row
 
-    def move(self, dir):
+    def move(self, direction):
         moved = False
         for i in range(4):
-            # Extraer fila o columna según dirección
-            line = self.board[i][:] if dir in ['L','R'] else [self.board[k][i] for k in range(4)]
-            
-            # Limpiar ceros y orientar según dirección
-            temp = [x for x in (line[::-1] if dir in ['R','D'] else line) if x != 0]
-            
-            # Fusionar números iguales
-            for k in range(len(temp)-1):
-                if temp[k] == temp[k+1] and temp[k] != 0:
-                    temp[k] *= 2
-                    temp[k+1] = 0
-            
-            # Limpiar ceros post-fusión y rellenar hasta 4
-            temp = [x for x in temp if x != 0]
-            temp += [0]*(4-len(temp))
-            
-            # Volver a la orientación original si era necesario
-            final = temp[::-1] if dir in ['R','D'] else temp
-            
-            if final != line:
-                moved = True
-                if dir in ['L','R']: self.board[i] = final
-                else:
-                    for k in range(4): self.board[k][i] = final[k]
+            if direction in ['LEFT', 'RIGHT']:
+                row = self.board[i][:]
+                if direction == 'RIGHT': row = row[::-1]
+                row = self.compress(row)
+                row = self.merge(row)
+                row = self.compress(row)
+                if direction == 'RIGHT': row = row[::-1]
+                if row != self.board[i]:
+                    self.board[i] = row
+                    moved = True
+            else:
+                col = [self.board[k][i] for k in range(4)]
+                if direction == 'DOWN': col = col[::-1]
+                col = self.compress(col)
+                col = self.merge(col)
+                col = self.compress(col)
+                if direction == 'DOWN': col = col[::-1]
+                for k in range(4):
+                    if self.board[k][i] != col[k]:
+                        self.board[k][i] = col[k]
+                        moved = True
         return moved
 
-    def dibujar_columna_guia(self, screen, x_base, valores):
-        # Configuración de tamaño de la guía (MÁS GRANDE)
-        tam_cuadro = 42
-        espaciado_y = 95
+    def update(self, dt: float):
+        keys = pygame.key.get_pressed()
+        if self.mostrando_ayuda:
+            if keys[pygame.K_SPACE]:
+                self.mostrando_ayuda = False
+            return 
+
+        if self.tecla_liberada:
+            moved = False
+            if keys[pygame.K_LEFT]: moved = self.move('LEFT')
+            elif keys[pygame.K_RIGHT]: moved = self.move('RIGHT')
+            elif keys[pygame.K_UP]: moved = self.move('UP')
+            elif keys[pygame.K_DOWN]: moved = self.move('DOWN')
+            
+            if moved:
+                self.generate_new_number()
+                self.tecla_liberada = False
         
+        if not any([keys[pygame.K_LEFT], keys[pygame.K_RIGHT], keys[pygame.K_UP], keys[pygame.K_DOWN]]):
+            self.tecla_liberada = True
+
+    def dibujar_columna_guia(self, x_base, valores):
+        tam_mini = 35
+        y_inicial = 80
         for idx, val in enumerate(valores):
-            y_pos = 70 + (idx * espaciado_y)
-            
-            # Texto de la operación (ej: 2+2=4)
-            txt = self.font_guia_txt.render(f"{val}+{val}={val*2}", True, (200, 200, 200))
-            screen.blit(txt, (x_base, y_pos))
-            
-            # Dibujo de la secuencia: [Cuadro] [Cuadro] - [Resultado]
-            y_cuadros = y_pos + 25
-            # Bloque 1
-            pygame.draw.rect(screen, self.colores[val], (x_base, y_cuadros, tam_cuadro, tam_cuadro-5), border_radius=6)
-            # Bloque 2
-            pygame.draw.rect(screen, self.colores[val], (x_base + tam_cuadro + 10, y_cuadros, tam_cuadro, tam_cuadro-5), border_radius=6)
-            # Guion
-            pygame.draw.rect(screen, (120, 120, 120), (x_base + (tam_cuadro*2) + 15, y_cuadros + 18, 12, 4))
-            # Bloque Resultado
+            y_pos = y_inicial + (idx * 100)
+            txt = self.font_guia.render(f"{val}+{val}={val*2}", True, (200, 200, 200))
+            self.surface.blit(txt, (x_base, y_pos - 20))
+            pygame.draw.rect(self.surface, self.COLORES[val], (x_base, y_pos, tam_mini, tam_mini), border_radius=5)
+            pygame.draw.rect(self.surface, self.COLORES[val], (x_base + 45, y_pos, tam_mini, tam_mini), border_radius=5)
+            pygame.draw.rect(self.surface, (100, 100, 100), (x_base + 85, y_pos + 15, 10, 3))
             res_val = val * 2
-            pygame.draw.rect(screen, self.colores.get(res_val, (255,255,255)), (x_base + (tam_cuadro*2) + 35, y_cuadros, tam_cuadro, tam_cuadro-5), border_radius=6)
+            pygame.draw.rect(self.surface, self.COLORES.get(res_val, (255,255,255)), (x_base + 105, y_pos, tam_mini, tam_mini), border_radius=5)
 
-    def draw(self, screen):
-        screen.fill((43, 44, 48)) # Fondo gris oscuro
-        sw, sh = screen.get_size()
+    def draw(self):
+        self.surface.fill((43, 43, 45))
+        ancho, alto = self.surface.get_size()
         
-        # --- GUÍAS LATERALES ---
-        # Izquierda: 2 al 32
-        self.dibujar_columna_guia(screen, 35, [2, 4, 8, 16, 32])
-        # Derecha: 64 al 1024
-        self.dibujar_columna_guia(screen, sw - 195, [64, 128, 256, 512, 1024])
+        self.dibujar_columna_guia(50, [2, 4, 8, 16, 32])
+        self.dibujar_columna_guia(ancho - 180, [64, 128, 256, 512, 1024])
 
-        # --- TABLERO CENTRADO ---
-        tile_size = 105
-        gap = 12
-        board_size = (tile_size * 4) + (gap * 5)
-        bx = (sw - board_size) // 2
-        by = (sh - board_size) // 2
-        
-        # Fondo del tablero
-        pygame.draw.rect(screen, (34, 34, 38), (bx, by, board_size, board_size), border_radius=15)
-        
+        cell_size = 120
+        gap = 10
+        board_size = (cell_size * 4) + (gap * 5)
+        offset_x, offset_y = (ancho - board_size) // 2, (alto - board_size) // 2
+
+        pygame.draw.rect(self.surface, (34, 34, 34), (offset_x, offset_y, board_size, board_size), border_radius=15)
+
         for i in range(4):
             for j in range(4):
                 val = self.board[i][j]
-                color = self.colores.get(val, (60, 60, 65))
-                rx = bx + gap + (j * (tile_size + gap))
-                ry = by + gap + (i * (tile_size + gap))
+                color_fondo = self.COLORES.get(val, (60,60,65))
+                rect = pygame.Rect(offset_x + gap + (j*(cell_size+gap)), offset_y + gap + (i*(cell_size+gap)), cell_size, cell_size)
                 
-                pygame.draw.rect(screen, color, (rx, ry, tile_size, tile_size), border_radius=10)
+                pygame.draw.rect(self.surface, color_fondo, rect, border_radius=8)
                 
                 if val != 0:
-                    # Texto del número con color gris oscuro para contraste
-                    txt_surf = self.font_num.render(str(val), True, (90, 90, 90))
-                    rect = txt_surf.get_rect(center=(rx + tile_size//2, ry + tile_size//2))
-                    screen.blit(txt_surf, rect)
+                    # CALCULAMOS UN COLOR BASADO EN EL FONDO (Más oscuro para contraste)
+                    # Tomamos los valores R, G, B del bloque y los reducimos un 40%
+                    txt_color = (
+                        max(0, int(color_fondo[0] * 0.6)),
+                        max(0, int(color_fondo[1] * 0.6)),
+                        max(0, int(color_fondo[2] * 0.6))
+                    )
+                    
+                    text = self.font.render(str(val), True, txt_color)
+                    self.surface.blit(text, text.get_rect(center=rect.center))
+
+        if self.mostrando_ayuda:
+            overlay = pygame.Surface((ancho, alto), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 200))
+            self.surface.blit(overlay, (0,0))
+
+            cuadro_ayuda = pygame.Rect(0, 0, 500, 350)
+            cuadro_ayuda.center = (ancho // 2, alto // 2)
+            pygame.draw.rect(self.surface, (50, 50, 70), cuadro_ayuda, border_radius=20)
+            pygame.draw.rect(self.surface, (255, 255, 255), cuadro_ayuda, 3, border_radius=20)
+
+            tit = self.font_ayuda.render("¿CÓMO JUGAR?", True, (255, 255, 255))
+            self.surface.blit(tit, tit.get_rect(center=(ancho//2, cuadro_ayuda.top + 50)))
+
+            teclas_txt = [
+                "Usa las FLECHAS del teclado",
+                "para mover los bloques.",
+                "¡Une colores iguales para ganar!"
+            ]
+            for i, linea in enumerate(teclas_txt):
+                l_render = self.font_ayuda.render(linea, True, (200, 200, 200))
+                self.surface.blit(l_render, l_render.get_rect(center=(ancho//2, cuadro_ayuda.top + 120 + (i*35))))
+
+            cierre = self.font_ayuda.render("Presiona ESPACIO para comenzar", True, (255, 215, 0))
+            self.surface.blit(cierre, cierre.get_rect(center=(ancho//2, cuadro_ayuda.bottom - 50)))
