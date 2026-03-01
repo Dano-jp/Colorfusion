@@ -211,7 +211,7 @@ class MiJuego(GameBase):
     def __init__(self):
         meta = GameMetadata(
             title="Color Fusion",
-            description="Juego 2048 con colores pastel",
+            description="Juego donde se tiene que fusionar bloques de colores hasta llegar al número 2048 o hasta el último color",
             authors=["Luis Lameda", "Genesis Bentancout", "Antonella Fermin", "Alexandra Cedeño"],
             group_number=8
         )
@@ -229,7 +229,7 @@ class MiJuego(GameBase):
                 self.juego.reset_game()
                 self.estado = "juego"
             elif resultado == "salir":
-                self.exit_game()
+                self._stop_context()
         elif self.estado == "juego":
             resultado = self.juego.update()
             if resultado == "menu":
